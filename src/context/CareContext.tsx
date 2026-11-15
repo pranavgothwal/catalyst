@@ -606,8 +606,20 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       throw new Error('Permission denied: Only registered caregivers can create shift handovers.');
     }
 
-    const unresolved = careLoops.filter((l) => l.status !== 'resolved').length;
-    const exceptions = doseInstances.filter((d) => d.status === 'unconfirmed' || d.status === 'not_taken').length;
+    const unresolvedLoops = careLoops.filter((l) => l.status !== 'resolved');
+    const unresolvedCount = unresolvedLoops.length;
+    const medicationExceptions = doseInstances.filter((d) => d.status === 'unconfirmed' || d.status === 'not_taken');
+    const exceptionsCount = medicationExceptions.length;
+
+    // Derived intelligence synthesis from real active state
+    const loopSummary = unresolvedCount > 0 
+      ? `Active Loops: ${unresolvedLoops.map(l => `${l.title} [${l.status.toUpperCase()}]`).join(', ')}`
+      : 'No unresolved care loops.';
+    const medSummary = exceptionsCount > 0
+      ? `Medication exceptions needing attention: ${medicationExceptions.map(d => `${d.medicationName} (${d.scheduledTime})`).join(', ')}`
+      : 'All scheduled medication doses confirmed.';
+
+    const computedSummary = `${departingNote ? departingNote.trim() + ' | ' : ''}${loopSummary} | ${medSummary}`;
 
     const handover: CaregiverHandover = {
       id: `handover-${Date.now()}`,
@@ -616,10 +628,10 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       departingCaregiverName: currentProfile.fullName,
       shiftStart: new Date(demoTime.getTime() - 8 * 3600 * 1000).toISOString(),
       shiftEnd: demoTime.toISOString(),
-      briefText: departingNote || 'Shift completed. Vital signs stable, routine adhered to.',
-      unresolvedLoopsCount: unresolved,
-      medicationExceptionsCount: exceptions,
-      observations,
+      briefText: computedSummary,
+      unresolvedLoopsCount: unresolvedCount,
+      medicationExceptionsCount: exceptionsCount,
+      observations: observations.map(o => o.trim().slice(0, 300)),
       createdAt: demoTime.toISOString(),
     };
 
@@ -627,7 +639,7 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addTimelineEvent(
       'handover',
       `Caregiver Shift Prepared: ${currentProfile.fullName}`,
-      `Handover ready with ${unresolved} open loop(s) and ${exceptions} medication exception(s).`,
+      `Handover ready with ${unresolvedCount} open loop(s) and ${exceptionsCount} medication exception(s).`,
       'info'
     );
 

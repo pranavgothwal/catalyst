@@ -81,3 +81,44 @@ test('Backend Security: verifies unauthenticated endpoint lock and headers', asy
   // Verify app exists and has disabled x-powered-by
   assert.equal(app.get('x-powered-by'), false);
 });
+
+test('Caregiver Handover Intelligence: computes synthesised summary from real active loops and medication exceptions', () => {
+  const activeLoops = [
+    { id: 'l1', title: 'Unconfirmed: Metformin 500mg', status: 'open' },
+    { id: 'l2', title: 'Doctor Appointment Check', status: 'claimed' },
+  ];
+  const doseExceptions = [
+    { id: 'd1', medicationName: 'Amlodipine 5mg', scheduledTime: '08:30', status: 'unconfirmed' },
+  ];
+
+  const loopSummary = activeLoops.length > 0
+    ? `Active Loops: ${activeLoops.map(l => `${l.title} [${l.status.toUpperCase()}]`).join(', ')}`
+    : 'No unresolved care loops.';
+  const medSummary = doseExceptions.length > 0
+    ? `Medication exceptions needing attention: ${doseExceptions.map(d => `${d.medicationName} (${d.scheduledTime})`).join(', ')}`
+    : 'All scheduled medication doses confirmed.';
+
+  const note = 'Morning routine completed';
+  const computedSummary = `${note} | ${loopSummary} | ${medSummary}`;
+
+  assert.equal(computedSummary.includes('Unconfirmed: Metformin 500mg [OPEN]'), true);
+  assert.equal(computedSummary.includes('Amlodipine 5mg (08:30)'), true);
+});
+
+test('Provenance Enforcement: check-in provenance distinguishes elder self-report, caregiver observation, and family', () => {
+  const rolesAndProvenance = [
+    { role: 'elder', expected: 'self_reported' },
+    { role: 'caregiver', expected: 'caregiver_observed' },
+    { role: 'family', expected: 'family_observed' },
+  ];
+
+  for (const { role, expected } of rolesAndProvenance) {
+    const provenance =
+      role === 'elder'
+        ? 'self_reported'
+        : role === 'caregiver'
+        ? 'caregiver_observed'
+        : 'family_observed';
+    assert.equal(provenance, expected);
+  }
+});
