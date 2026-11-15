@@ -93,7 +93,7 @@ export const FamilyCoordinationView: React.FC = () => {
     e.preventDefault();
     if (!newMedName || !newMedDosage) return;
 
-    addMedication({
+    const res = addMedication({
       name: newMedName,
       dosage: newMedDosage,
       instructions: newMedInstructions || 'Take with water',
@@ -102,6 +102,11 @@ export const FamilyCoordinationView: React.FC = () => {
       category: 'routine',
       active: true,
     });
+
+    if (res && !res.success) {
+      setErrorMessage(res.error || 'Failed to add medication');
+      return;
+    }
 
     setNewMedName('');
     setNewMedDosage('');

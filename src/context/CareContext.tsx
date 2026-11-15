@@ -76,7 +76,7 @@ interface CareContextType {
   ) => { success: boolean; error?: string };
   triggerShiftHandover: (notes: string[], departingNote: string) => CaregiverHandover;
   acceptShiftHandover: (handoverId: string) => void;
-  addMedication: (med: Omit<Medication, 'id' | 'circleId'>) => void;
+  addMedication: (med: Omit<Medication, 'id' | 'circleId'>) => { success: boolean; error?: string };
   addAppointment: (apt: Omit<Appointment, 'id' | 'circleId' | 'status'>) => void;
   logAccess: (category: AccessReceipt['categoryAccessed']) => void;
 }
@@ -86,27 +86,110 @@ const CareContext = createContext<CareContextType | null>(null);
 const STORAGE_KEY = 'alwayswithyou_state_v1';
 
 export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // Try loading saved persistent state from localStorage
+  const savedState = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      // Local storage unparseable or in private mode
+    }
+    return null;
+  }, []);
+
   // Demo clock state - initialized to 9:15 AM today to demonstrate morning meds
   const [demoTime, setDemoTime] = useState<Date>(() => {
+    if (savedState?.demoTime) {
+      return new Date(savedState.demoTime);
+    }
     const d = new Date();
     d.setHours(9, 15, 0, 0);
     return d;
   });
 
-  const [currentProfile, setCurrentProfile] = useState<Profile>(SEEDED_PROFILES[0]); // Sheela (Elder) default
-  const [language, setLanguage] = useState<'en' | 'hi' | 'mr'>('en');
+  const [currentProfile, setCurrentProfile] = useState<Profile>(() => {
+    if (savedState?.currentProfileId) {
+      const match = SEEDED_PROFILES.find((p) => p.id === savedState.currentProfileId);
+      if (match) return match;
+    }
+    return SEEDED_PROFILES[0]; // Sheela (Elder) default
+  });
 
-  const [medications, setMedications] = useState<Medication[]>(SEEDED_MEDICATIONS);
-  const [doseInstances, setDoseInstances] = useState<DoseInstance[]>(() =>
-    getInitialDoseInstances(demoTime)
-  );
-  const [careLoops, setCareLoops] = useState<CareLoop[]>([]);
-  const [loopEvents, setLoopEvents] = useState<LoopEvent[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>(SEEDED_APPOINTMENTS);
-  const [handovers, setHandovers] = useState<CaregiverHandover[]>([]);
-  const [timeline, setTimeline] = useState<TimelineEvent[]>(SEEDED_TIMELINE);
-  const [accessReceipts, setAccessReceipts] = useState<AccessReceipt[]>([]);
-  const [isClockSimulated, setIsClockSimulated] = useState<boolean>(false);
+  const [language, setLanguage] = useState<'en' | 'hi' | 'mr'>(() => {
+    return savedState?.language || 'en';
+  });
+
+  const [medications, setMedications] = useState<Medication[]>(() => {
+    return savedState?.medications || SEEDED_MEDICATIONS;
+  });
+
+  const [doseInstances, setDoseInstances] = useState<DoseInstance[]>(() => {
+    return savedState?.doseInstances || getInitialDoseInstances(demoTime);
+  });
+
+  const [careLoops, setCareLoops] = useState<CareLoop[]>(() => {
+    return savedState?.careLoops || [];
+  });
+
+  const [loopEvents, setLoopEvents] = useState<LoopEvent[]>(() => {
+    return savedState?.loopEvents || [];
+  });
+
+  const [appointments, setAppointments] = useState<Appointment[]>(() => {
+    return savedState?.appointments || SEEDED_APPOINTMENTS;
+  });
+
+  const [handovers, setHandovers] = useState<CaregiverHandover[]>(() => {
+    return savedState?.handovers || [];
+  });
+
+  const [timeline, setTimeline] = useState<TimelineEvent[]>(() => {
+    return savedState?.timeline || SEEDED_TIMELINE;
+  });
+
+  const [accessReceipts, setAccessReceipts] = useState<AccessReceipt[]>(() => {
+    return savedState?.accessReceipts || [];
+  });
+
+  const [isClockSimulated, setIsClockSimulated] = useState<boolean>(() => {
+    return !!savedState?.isClockSimulated;
+  });
+
+  // Persistent save to localStorage whenever state updates
+  useEffect(() => {
+    try {
+      const payload = {
+        demoTime: demoTime.toISOString(),
+        currentProfileId: currentProfile.id,
+        language,
+        medications,
+        doseInstances,
+        careLoops,
+        loopEvents,
+        appointments,
+        handovers,
+        timeline,
+        accessReceipts,
+        isClockSimulated,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch (e) {
+      // Local storage quota or security error
+    }
+  }, [
+    demoTime,
+    currentProfile,
+    language,
+    medications,
+    doseInstances,
+    careLoops,
+    loopEvents,
+    appointments,
+    handovers,
+    timeline,
+    accessReceipts,
+    isClockSimulated,
+  ]);
 
   // Switch Role helper
   const switchRole = (role: Role) => {
@@ -254,10 +337,18 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const resetDemoClock = () => {
+    localStorage.removeItem(STORAGE_KEY);
     const d = new Date();
     d.setHours(9, 15, 0, 0);
     setDemoTime(d);
     setIsClockSimulated(false);
+    setDoseInstances(getInitialDoseInstances(d));
+    setCareLoops([]);
+    setLoopEvents([]);
+    setMedications(SEEDED_MEDICATIONS);
+    setAppointments(SEEDED_APPOINTMENTS);
+    setTimeline(SEEDED_TIMELINE);
+    setHandovers([]);
   };
 
   // Record medication check-in
@@ -340,6 +431,11 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const targetLoop = careLoops.find((l) => l.id === loopId);
     if (!targetLoop) return { success: false, error: 'Loop not found' };
 
+    // Role check: Elders cannot claim coordination loops on behalf of other family members
+    if (currentProfile.role === 'elder') {
+      return { success: false, error: 'Elders cannot claim care loops. Care coordination is handled by family and caregivers.' };
+    }
+
     const res = CareLoopEngine.claimLoop(
       targetLoop,
       currentProfile.id,
@@ -367,6 +463,11 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const handOffCareLoop = (loopId: string, newOwnerId: string, notes: string) => {
     const targetLoop = careLoops.find((l) => l.id === loopId);
     if (!targetLoop) return { success: false, error: 'Loop not found' };
+
+    // Role check: Only authorized coordinators (family or active caregiver) can hand off
+    if (currentProfile.role === 'elder') {
+      return { success: false, error: 'Permission denied: Elder role cannot reassign or hand off care loops.' };
+    }
 
     const newOwner = SEEDED_PROFILES.find((p) => p.id === newOwnerId);
     if (!newOwner) return { success: false, error: 'Target owner not found' };
@@ -431,6 +532,11 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Trigger Caregiver Shift Handover
   const triggerShiftHandover = (observations: string[], departingNote: string): CaregiverHandover => {
+    // Permission check: Only caregivers can trigger caregiver shift handovers
+    if (currentProfile.role !== 'caregiver') {
+      throw new Error('Permission denied: Only registered caregivers can create shift handovers.');
+    }
+
     const unresolved = careLoops.filter((l) => l.status !== 'resolved').length;
     const exceptions = doseInstances.filter((d) => d.status === 'unconfirmed' || d.status === 'not_taken').length;
 
@@ -483,8 +589,17 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     );
   };
 
-  // Add Medication
+  // Add Medication with permission enforcement
   const addMedication = (medData: Omit<Medication, 'id' | 'circleId'>) => {
+    // Permission check: lookup current member permissions
+    const member = SEEDED_MEMBERS.find((m) => m.profileId === currentProfile.id);
+    if (!member || !member.canManageMedications) {
+      return {
+        success: false,
+        error: `Permission Denied: ${currentProfile.fullName} is not authorized to add or edit prescriptions in this care circle.`,
+      };
+    }
+
     const newMed: Medication = {
       ...medData,
       id: `med-${Date.now()}`,
@@ -509,6 +624,8 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       `Schedule configured: ${newMed.frequency} (${newMed.dosage}). Added by ${currentProfile.fullName}.`,
       'info'
     );
+
+    return { success: true };
   };
 
   // Add Appointment
