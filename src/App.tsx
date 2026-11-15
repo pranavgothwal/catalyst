@@ -125,7 +125,7 @@ export const App: React.FC = () => {
               S
             </div>
             <div>
-              <div className="text-xs font-bold text-ivory-100">Sheela Verma</div>
+              <div className="text-xs font-bold text-ivory-100">Sheela Deshmukh</div>
               <div className="text-[10px] text-sage-300">82 · Mumbai</div>
             </div>
           </div>
@@ -145,7 +145,10 @@ export const App: React.FC = () => {
             return (
               <button
                 key={p.id}
-                onClick={() => switchProfile(p.id)}
+                onClick={() => {
+                  switchProfile(p.id);
+                  setSidebarOpen(false);
+                }}
                 className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl transition-all ${
                   isActive ? 'bg-sage-600/30 ring-1 ring-sage-500/50' : 'hover:bg-forest-800/50'
                 }`}

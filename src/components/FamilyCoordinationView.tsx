@@ -14,6 +14,9 @@ import {
   MessageSquare,
   FileCheck,
   History,
+  Users,
+  ShieldCheck,
+  XCircle,
 } from 'lucide-react';
 
 export const FamilyCoordinationView: React.FC = () => {
@@ -38,7 +41,7 @@ export const FamilyCoordinationView: React.FC = () => {
 
   // Modal states
   const [claimNotes, setClaimNotes] = useState('');
-  const [handOffTarget, setHandOffTarget] = useState(() => profiles.find(p => p.role !== 'elder' && p.id !== currentProfile.id)?.id ?? profiles[3].id); // Sunita default
+  const [handOffTarget, setHandOffTarget] = useState('');
   const [handOffNotes, setHandOffNotes] = useState('Please check blood pressure and administer with breakfast.');
   const [resolutionNotes, setResolutionNotes] = useState('');
   const [evidenceType, setEvidenceType] = useState<CareLoop['evidenceType']>('observation');
@@ -57,6 +60,15 @@ export const FamilyCoordinationView: React.FC = () => {
   const currentMember = members.find((m) => m.profileId === currentProfile.id);
   const canAddMeds = currentMember?.canManageMedications ?? false;
 
+  // Handoff targets: non-elder profiles excluding current profile
+  const availableHandoffProfiles = profiles.filter(
+    (p) => p.id !== currentProfile.id && p.role !== 'elder'
+  );
+  const effectiveHandOffTarget =
+    availableHandoffProfiles.find((p) => p.id === handOffTarget)?.id ||
+    availableHandoffProfiles[0]?.id ||
+    '';
+
   const handleClaim = (loopId: string) => {
     setErrorMessage(null);
     const res = claimCareLoop(loopId, claimNotes);
@@ -70,7 +82,15 @@ export const FamilyCoordinationView: React.FC = () => {
 
   const handleHandOff = (loopId: string) => {
     setErrorMessage(null);
-    const res = handOffCareLoop(loopId, handOffTarget, handOffNotes);
+    if (!handOffNotes.trim()) {
+      setErrorMessage('Handover instructions are required.');
+      return;
+    }
+    if (!effectiveHandOffTarget) {
+      setErrorMessage('No valid handover target available.');
+      return;
+    }
+    const res = handOffCareLoop(loopId, effectiveHandOffTarget, handOffNotes);
     if (!res.success) {
       setErrorMessage(res.error || 'Failed to hand off loop');
     } else {
@@ -168,6 +188,17 @@ export const FamilyCoordinationView: React.FC = () => {
             }`}
           >
             Appointments
+          </button>
+          <button
+            onClick={() => setActiveTab('members')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'members'
+                ? 'bg-forest-900 text-ivory-100 shadow'
+                : 'text-forest-800 hover:text-forest-950'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            Care Circle
           </button>
         </div>
       </div>
@@ -420,6 +451,100 @@ export const FamilyCoordinationView: React.FC = () => {
         </div>
       )}
 
+      {/* CARE CIRCLE MEMBERS TAB */}
+      {activeTab === 'members' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-extrabold text-forest-900">Care Circle & Permissions</h3>
+              <p className="text-xs text-forest-800/70">
+                Permission-based shared access. Distinct authorizations are enforced per member.
+              </p>
+            </div>
+            <div className="text-xs bg-sage-100 border border-sage-300 text-sage-800 font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 self-start sm:self-auto">
+              <ShieldCheck className="w-4 h-4 text-sage-600" />
+              Active Circle: Sheela Main Circle
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {members.map((member) => {
+              const profile = profiles.find((p) => p.id === member.profileId);
+              const isCurrent = currentProfile.id === member.profileId;
+              return (
+                <div
+                  key={member.id}
+                  className={`p-5 rounded-3xl border-2 space-y-3 transition-all ${
+                    isCurrent
+                      ? 'bg-sage-50/50 border-sage-400 ring-2 ring-sage-400/20 shadow-sm'
+                      : 'bg-ivory-50 border-forest-900/10'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={profile?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.profileId}`}
+                        alt={profile?.fullName || member.relationship}
+                        className="w-10 h-10 rounded-full object-cover border border-forest-900/15"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-base font-extrabold text-forest-900">
+                            {profile?.fullName || member.relationship}
+                          </h4>
+                          {isCurrent && (
+                            <span className="text-[10px] bg-sage-600 text-ivory-100 font-bold px-2 py-0.5 rounded-full">
+                              You
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-forest-800/80 font-medium">{member.relationship}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-forest-900/10 text-forest-900 px-2.5 py-1 rounded-full">
+                      {member.role}
+                    </span>
+                  </div>
+
+                  <div className="border-t border-forest-900/10 pt-3 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-forest-800/80">Manage Prescriptions:</span>
+                      {member.canManageMedications ? (
+                        <span className="inline-flex items-center gap-1 font-bold text-sage-700 bg-sage-100 px-2 py-0.5 rounded-md">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Authorized
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 font-semibold text-forest-800/60 bg-forest-900/5 px-2 py-0.5 rounded-md">
+                          <XCircle className="w-3.5 h-3.5 text-forest-800/40" /> View Only
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-forest-800/80">View Audit & Timeline:</span>
+                      {member.canViewAudit ? (
+                        <span className="inline-flex items-center gap-1 font-bold text-sage-700 bg-sage-100 px-2 py-0.5 rounded-md">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Full Access
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 font-semibold text-forest-800/60 bg-forest-900/5 px-2 py-0.5 rounded-md">
+                          <XCircle className="w-3.5 h-3.5 text-forest-800/40" /> Restricted
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-forest-800/80">Emergency Contact:</span>
+                      <span className="font-semibold text-forest-900">
+                        {member.isEmergencyContact ? 'Yes (Primary Alert)' : 'No'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Loop Management Modal (Resolve & Hand Off) */}
       {selectedLoop && (
         <div className="fixed inset-0 z-50 bg-forest-950/70 backdrop-blur-sm flex items-center justify-center p-4">
@@ -485,41 +610,58 @@ export const FamilyCoordinationView: React.FC = () => {
                 <Share2 className="w-4 h-4" />
                 Option B: Hand Off Responsibility
               </h5>
-              <div>
-                <label className="text-xs font-semibold text-forest-900 block mb-1">
-                  Transfer Responsibility To
-                </label>
-                <select
-                  value={handOffTarget}
-                  onChange={(e) => setHandOffTarget(e.target.value)}
-                  className="w-full text-xs p-2 rounded-xl border border-forest-900/20 bg-ivory-100"
-                >
-                  {profiles
-                    .filter((p) => p.id !== currentProfile.id && p.role !== 'elder')
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.fullName} ({p.role})
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-forest-900 block mb-1">
-                  Handover Instructions
-                </label>
-                <input
-                  type="text"
-                  value={handOffNotes}
-                  onChange={(e) => setHandOffNotes(e.target.value)}
-                  className="w-full text-xs p-2 rounded-xl border border-forest-900/20 bg-ivory-100"
-                />
-              </div>
-              <button
-                onClick={() => handleHandOff(selectedLoop.id)}
-                className="w-full bg-forest-900 hover:bg-forest-950 text-ivory-100 text-xs font-bold py-2.5 rounded-xl"
-              >
-                Execute Hand-off
-              </button>
+
+              {selectedLoop.ownerId && selectedLoop.ownerId !== currentProfile.id ? (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 space-y-1">
+                  <p className="font-semibold">
+                    Currently assigned to: <strong>{selectedLoop.ownerName}</strong>
+                  </p>
+                  <p className="text-[11px] text-amber-700">
+                    Only the current owner can reassign responsibility to another member.
+                  </p>
+                </div>
+              ) : availableHandoffProfiles.length === 0 ? (
+                <div className="p-3 bg-ivory-200 rounded-xl text-xs text-forest-800">
+                  No other eligible circle members available for handoff.
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-xs font-semibold text-forest-900 block mb-1">
+                      Transfer Responsibility To
+                    </label>
+                    <select
+                      value={effectiveHandOffTarget}
+                      onChange={(e) => setHandOffTarget(e.target.value)}
+                      className="w-full text-xs p-2 rounded-xl border border-forest-900/20 bg-ivory-100"
+                    >
+                      {availableHandoffProfiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.fullName} ({p.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-forest-900 block mb-1">
+                      Handover Instructions
+                    </label>
+                    <input
+                      type="text"
+                      value={handOffNotes}
+                      onChange={(e) => setHandOffNotes(e.target.value)}
+                      placeholder="e.g. Please check blood pressure and administer with meal."
+                      className="w-full text-xs p-2 rounded-xl border border-forest-900/20 bg-ivory-100"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleHandOff(selectedLoop.id)}
+                    className="w-full bg-forest-900 hover:bg-forest-950 text-ivory-100 text-xs font-bold py-2.5 rounded-xl transition-all active:scale-95"
+                  >
+                    Execute Hand-off
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

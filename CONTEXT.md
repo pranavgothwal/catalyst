@@ -18,47 +18,42 @@
   - `CareContext`: Persistent state with `localStorage` (versioned `alwayswithyou_state_v2`), profile ID-based switching (`switchProfile`), RBAC permission checks, and deterministic demo clock.
 - **Deployment:** Multi-stage Dockerfile for containerized deployment (Cloud Run ready).
 
-## 3. Implemented Features & Recent Fixes
+## 3. Implemented Features & Audit Verifications
 
-### A. Rahul Persona Bug Fix (Root Cause & Resolution)
-- **Root Cause:** Persona switcher previously invoked `switchRole(p.role)`, which searched `SEEDED_PROFILES.find(p => p.role === role)`. Since both Priya and Rahul have `role: 'family'` and Priya appeared first in the array, clicking Rahul always selected Priya. Furthermore, `FamilyCoordinationView` hardcoded `"Priya's Hub"`.
-- **Resolution:**
-  - Switched navigation to explicit profile ID: `switchProfile(profileId: string)`.
-  - Updated `PersonaSwitcher` to call `switchProfile(p.id)`.
-  - Dynamically titles the family view as `{currentProfile.fullName.split(' ')[0]}'s Hub` (displays "Rahul's Hub" or "Priya's Hub").
-  - Enforced RBAC at both UI and business logic layers: Rahul's member profile has `canManageMedications: false`, correctly hiding the "Add Prescription" button and rejecting attempts at the engine level.
-  - Added 10 automated regression tests in `test/rahulPersona.test.js` validating distinct IDs, permissions, loop claims, and switching sequences.
+### A. Manual-Interaction & UI Regression Audit (Verified)
+1. **Four-Persona Switching:** All personas (Sheela, Priya, Rahul, Sunita) switch deterministically by unique `profileId` via `switchProfile(p.id)`. On mobile, selecting a persona automatically closes the sidebar drawer.
+2. **Permission Segregation Across Switching & Refreshes:**
+   - Priya (`canManageMedications: true`) has full prescription management privileges.
+   - Rahul (`canManageMedications: false`) is strictly restricted to View Only mode (Add Prescription button hidden; backend engine enforces rejection).
+   - A dedicated **Care Circle** tab in `FamilyCoordinationView` renders the membership roster with explicit badges for prescription authorization, audit access, and emergency contact status.
+3. **Care Loop Lifecycle:** Open, Claim, Hand Off, Lapse, Escalate, and Resolve are verified through the UI:
+   - Hand-off targets dynamically exclude the current user and elder role.
+   - Non-owners of claimed loops are clearly informed that only the current owner can reassign responsibility.
+   - Evidence and resolution notes are strictly mandatory to close loops.
+4. **Deterministic Demo Clock:** Quick-advance buttons (`+15m`, `+45m (Miss)`, `+2h (Escalate)`, `Reset 9:15 AM`) reliably trigger dose evaluations, loop creation, and status transitions.
+5. **Layout & Responsive Shell:**
+   - Desktop: Left sidebar (`w-64`) with brand identity, care recipient context ("Sheela Deshmukh, 82"), role navigation, and persona switcher.
+   - Mobile: Top bar with persona badge, sliding drawer, bottom tab bar, and compact floating demo clock pill positioned at `bottom-20` to avoid viewport obstruction.
+6. **Elder Today Accessibility:** High-contrast 24px text, native `SpeechSynthesis` read-aloud support, skip reason logging, privacy access receipts, and full English, Hindi (हिंदी), and Marathi (मराठी) localization.
+7. **Actionable Feedback:** Zero broken or purely decorative buttons; input validation messages for empty notes and unauthorized actions.
+8. **Error-Free Execution:** Zero console errors, valid JSX hierarchy, and clean mobile responsive flow.
 
 ### B. Timezone & Timestamp Correction
-- **Root Cause:** Doses generated using UTC string concatenation (`toISOString().split('T')[0]`) created cross-boundary discrepancies when run in local timezones (e.g. IST UTC+5:30), causing afternoon doses to appear at evening hours or miss filter queries.
-- **Resolution:**
-  - Updated `MedicationScheduleEngine` and `seededData.ts` to construct timestamps using local date components (`getFullYear()`, `getMonth()`, `getDate()`).
-  - Updated `ElderTodayView` to filter today's doses using local date comparison.
-  - Bumped state storage key to `alwayswithyou_state_v2` ensuring fresh, consistent timestamps across reloads.
+- Doses generated using local date components (`getFullYear()`, `getMonth()`, `getDate()`) to eliminate UTC boundary shifts in Indian Standard Time (IST UTC+5:30) and other non-UTC environments.
 
-### C. UI/UX Redesign (Brand-Aligned & Human-Centred)
-- **Desktop Sidebar Navigation:** Fixed left sidebar featuring product identity, care recipient context (Sheela Verma, 82), role-specific navigation, and one-click profile switching.
-- **Mobile Navigation:** Responsive top bar with persona indicator and bottom tab bar ensuring comfortable one-handed navigation without horizontal overflow.
-- **Compact Floating Demo Clock:** Collapsible floating widget (`bottom-20 md:bottom-4`) that displays a minimal live status pill when collapsed and expands on click, preventing UI obstruction.
-- **Role-Aware Workspaces:**
-  - **ELDER Today:** Large text (24px+), clear contrast, read-aloud voice support, simple check-in actions, and access privacy receipts.
-  - **FAMILY Coordination:** Segmented tabs for active Care Loops, prescriptions, and appointments with atomic claim/handoff modals.
-  - **CAREGIVER Shift:** Shift status, active loop claiming, observation logs, and formal shift handover acceptance.
-  - **SHARED Timeline:** Immutable chronological feed tracking all events, actors, and provenance tags.
-
-## 4. Automated Test Results (18/18 Passing)
+## 4. Automated Test Results (21/21 Passing)
 All test suites run via Node.js test runner (`node --test test/*.test.js`):
-- `test/careLoop.test.js`:
+- `test/careLoop.test.js` (6 tests):
   - `CareLoopEngine: creates a loop in OPEN state with calculated deadline` (PASS)
   - `CareLoopEngine: claims an open loop atomically` (PASS)
   - `CareLoopEngine: prevents double claim by unauthorized actors` (PASS)
   - `CareLoopEngine: transitions from claimed to handed_off to another member` (PASS)
   - `CareLoopEngine: mandates resolution notes and evidence to resolve loop` (PASS)
   - `CareLoopEngine: advances to lapsed and escalated when deadline passes without claim` (PASS)
-- `test/careLoopWorkflow.test.js`:
+- `test/careLoopWorkflow.test.js` (2 tests):
   - `End-to-End Care Loop Workflow: Due -> Unconfirmed -> Loop Created -> Claimed -> Handed Off -> Resolved` (PASS)
   - `Role-based Permission Enforcement: Rahul cannot manage medications` (PASS)
-- `test/rahulPersona.test.js`:
+- `test/rahulPersona.test.js` (13 tests):
   - `Rahul profile exists in SEEDED_PROFILES with id=user-rahul and role=family` (PASS)
   - `Priya and Rahul both have role=family but are distinct profiles` (PASS)
   - `Rahul's member record: canManageMedications=false, canViewAudit=true` (PASS)
@@ -69,10 +64,13 @@ All test suites run via Node.js test runner (`node --test test/*.test.js`):
   - `Permission check: canManageMedications is false for Rahul, true for Priya` (PASS)
   - `All 4 personas have distinct IDs` (PASS)
   - `Persona switching sequence: Priya→Rahul→Sheela→Sunita→Priya all return correct profiles` (PASS)
+  - `Care Circle: All members have defined permissions and roles` (PASS)
+  - `CareLoopEngine: Non-owner cannot initiate a handoff on a claimed loop` (PASS)
+  - `Handoff validation: Available handoff targets exclude current user and elder role` (PASS)
 
 ## 5. Deployment Status & Known External Blocker
-- **Docker & Server:** Tested and working. Multi-stage Dockerfile builds `dist/` and runs production Express server.
-- **Google Cloud Run:** Deployment blocked on GCP IAM permissions. The service account `1059717057567-compute@developer.gserviceaccount.com` in project `sunny-emissary-463707-u0` lacks the `serviceusage.services.enable` permission to enable the Cloud Run Admin API (`run.googleapis.com`). Requires GCP project administrator to enable Cloud Run API in Cloud Console.
+- **Docker & Server:** Tested and verified. Multi-stage Dockerfile builds `dist/` and runs production Express server.
+- **Google Cloud Run:** Deployment is blocked on GCP IAM permissions. The service account `1059717057567-compute@developer.gserviceaccount.com` in project `sunny-emissary-463707-u0` lacks `serviceusage.services.enable` to enable the Cloud Run Admin API (`run.googleapis.com`). Requires GCP project administrator to enable Cloud Run API in Cloud Console.
 
 ## 6. Repository Structure
 ```

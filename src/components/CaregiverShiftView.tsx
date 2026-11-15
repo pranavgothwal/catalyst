@@ -37,6 +37,8 @@ export const CaregiverShiftView: React.FC = () => {
 
   const [activeLoopResolveId, setActiveLoopResolveId] = useState<string | null>(null);
   const [resolveNote, setResolveNote] = useState('');
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [shiftError, setShiftError] = useState<string | null>(null);
 
   // Assigned loops for Sunita or unassigned
   const caregiverLoops = careLoops.filter(
@@ -52,12 +54,22 @@ export const CaregiverShiftView: React.FC = () => {
   };
 
   const handleEndShift = () => {
-    triggerShiftHandover(observationsList, departingNotes);
-    setIsShiftActive(false);
+    setShiftError(null);
+    try {
+      triggerShiftHandover(observationsList, departingNotes);
+      setIsShiftActive(false);
+      setDepartingNotes('');
+    } catch (e: any) {
+      setShiftError(e.message || 'Failed to publish handover');
+    }
   };
 
   const handleResolveCaregiverLoop = (loopId: string) => {
-    if (!resolveNote.trim()) return;
+    if (!resolveNote.trim()) {
+      setResolveError('Observation and resolution notes are required.');
+      return;
+    }
+    setResolveError(null);
     resolveCareLoop(loopId, resolveNote, 'in_person_visit');
     setActiveLoopResolveId(null);
     setResolveNote('');
@@ -186,6 +198,9 @@ export const CaregiverShiftView: React.FC = () => {
                         placeholder="e.g. In-person visit: Assisted Sheela with Telmisartan dose."
                         className="w-full text-xs p-2 rounded-xl border border-forest-900/20 bg-ivory-50"
                       />
+                      {resolveError && (
+                        <p className="text-[11px] text-red-600 font-semibold">{resolveError}</p>
+                      )}
                       <div className="flex gap-2">
                         <button
                           onClick={() => setActiveLoopResolveId(null)}
@@ -315,6 +330,11 @@ export const CaregiverShiftView: React.FC = () => {
               placeholder="Summary note for family and incoming caregiver..."
               className="w-full text-xs p-3 rounded-2xl bg-forest-800 border border-forest-700 text-ivory-100 h-20"
             />
+            {shiftError && (
+              <p className="text-xs text-red-300 font-semibold bg-red-950/40 p-2.5 rounded-xl border border-red-500/30">
+                {shiftError}
+              </p>
+            )}
             <button
               onClick={handleEndShift}
               className="w-full bg-sage-600 hover:bg-sage-700 text-ivory-100 text-xs font-bold py-3 rounded-xl shadow flex items-center justify-center gap-2"

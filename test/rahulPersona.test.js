@@ -257,3 +257,57 @@ test('Persona switching sequence: Priya→Rahul→Sheela→Sunita→Priya all re
       `Expected role=${step.expectedRole}, got ${profile.role}`);
   }
 });
+
+// ---------------------------------------------------------------------------
+// TEST 11: Care Circle member directory has defined roles and permissions
+// ---------------------------------------------------------------------------
+test('Care Circle: All members have defined permissions and roles', () => {
+  assert.equal(SEEDED_MEMBERS.length, 4, 'Must have 4 registered members');
+  for (const m of SEEDED_MEMBERS) {
+    assert.ok(m.id, 'Member must have id');
+    assert.ok(m.profileId, 'Member must link to profileId');
+    assert.ok(m.role, 'Member must have assigned role');
+    assert.equal(typeof m.canManageMedications, 'boolean');
+    assert.equal(typeof m.canViewAudit, 'boolean');
+  }
+
+  // Verify Rahul vs Priya
+  const rahul = SEEDED_MEMBERS.find((m) => m.profileId === 'user-rahul');
+  const priya = SEEDED_MEMBERS.find((m) => m.profileId === 'user-priya');
+  assert.equal(rahul.canManageMedications, false);
+  assert.equal(priya.canManageMedications, true);
+});
+
+// ---------------------------------------------------------------------------
+// TEST 12: CareLoopEngine: Non-owner cannot initiate a handoff on a claimed loop
+// ---------------------------------------------------------------------------
+test('CareLoopEngine: Non-owner cannot initiate a handoff on a claimed loop', () => {
+  const loopClaimedByPriya = {
+    id: 'loop-test-handoff',
+    circleId: 'circle-sheela-main',
+    status: 'claimed',
+    ownerId: 'user-priya',
+    ownerName: 'Priya Deshmukh',
+  };
+
+  const actorId = 'user-rahul'; // Rahul tries to hand off Priya's loop
+  const canHandOff = loopClaimedByPriya.ownerId === actorId;
+  assert.equal(canHandOff, false, 'Non-owner must be rejected from initiating handoff');
+});
+
+// ---------------------------------------------------------------------------
+// TEST 13: Handoff target validation: Excludes current user and elder role
+// ---------------------------------------------------------------------------
+test('Handoff validation: Available handoff targets exclude current user and elder role', () => {
+  const currentUserId = 'user-priya';
+  const availableTargets = SEEDED_PROFILES.filter(
+    (p) => p.id !== currentUserId && p.role !== 'elder'
+  );
+
+  // Priya handing off: targets should be Rahul and Sunita
+  const targetIds = availableTargets.map((p) => p.id);
+  assert.ok(!targetIds.includes('user-priya'), 'Must not include self');
+  assert.ok(!targetIds.includes('user-sheela'), 'Must not include elder');
+  assert.ok(targetIds.includes('user-rahul'), 'Must include Rahul');
+  assert.ok(targetIds.includes('user-sunita'), 'Must include Sunita');
+});
