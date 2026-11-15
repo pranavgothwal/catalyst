@@ -14,50 +14,65 @@
 - **Backend / Server:** Express.js production server, health endpoints, SPA static routing, API endpoints for loops.
 - **State & Deterministic Engines:**
   - `CareLoopEngine`: Atomic claims, handoffs, lapse/escalation, evidence-backed resolutions.
-  - `MedicationScheduleEngine`: Timezone-aware, idempotent daily dose generation, grace periods.
-  - `CareContext`: Persistent state with `localStorage` fallback across page reloads, persona switching, role permission checks, and deterministic demo clock.
+  - `MedicationScheduleEngine`: Timezone-safe, idempotent daily dose generation, grace periods.
+  - `CareContext`: Persistent state with `localStorage` (versioned `alwayswithyou_state_v2`), profile ID-based switching (`switchProfile`), RBAC permission checks, and deterministic demo clock.
 - **Deployment:** Multi-stage Dockerfile for containerized deployment (Cloud Run ready).
 
-## 3. Implemented Features (P0 Complete & Verified)
-- [x] Cloned catalyst repository (`https://github.com/pranavgothwal/catalyst.git`).
-- [x] Full React 18 + TypeScript + Vite + Tailwind CSS scaffold.
-- [x] Role-aware unified experiences on shared care data:
-  - **ELDER Today:** Dignified greeting, large high-contrast medication cards, speech read-aloud support (`SpeechSynthesis`), skip reasons, upcoming appointments, emergency circle contacts, and access privacy controls.
-  - **FAMILY Coordination:** Care Loops engine hub, atomic responsibility claiming, delegation/handoff, verifiable resolution with required evidence, prescription manager with permission enforcement, and appointment views.
-  - **CAREGIVER Shift:** Shift start/end, active caregiver loop assignment, observations log, structured computed handover briefs with explicit incoming caregiver acceptance.
-- [x] Care Loop Engine:
-  - Full lifecycle: `OPEN` -> `CLAIMED` -> `HANDED_OFF` -> `RESOLVED`.
-  - Automatic time-based progression: `OPEN` -> `LAPSED` -> `ESCALATED`.
-  - Double-claim prevention and mandatory resolution evidence.
-- [x] Medication scheduling and adherence tracking:
-  - Honest status distinction: `due`, `unconfirmed`, `taken`, `not_taken`, `skipped` (with reason), and `follow_up`.
-  - Clear provenance recording (self-reported vs. caregiver observation).
-- [x] Role-Based Access Control (RBAC):
-  - Strictly enforced at context/engine layer: only authorized circle members can modify prescriptions (`canManageMedications`), elders cannot be forced into coordination claiming, and only caregivers can issue shift handovers.
-- [x] Shared immutable care timeline:
-  - Append-only event history with actor, role, timestamp, provenance, and severity.
-- [x] Elder-controlled privacy & access:
-  - Viewable access receipts showing which circle members accessed care categories.
-- [x] Multi-language support:
-  - English, Hindi (हिंदी), and Marathi (मराठी) translations on Elder Today interface.
-- [x] Seeded demo personas:
-  - Sheela (Elder care recipient), Priya (Family coordinator), Rahul (Family son), Sunita (Caregiver).
-- [x] Persistent State & Controllable Demo Clock:
-  - State survives browser refresh via synchronized local store.
-  - Interactive judge-friendly clock (+15m, +45m miss, +2h escalation, reset).
-  - Accelerates real state machine and updates Care Loop statuses without bypassing business rules.
-- [x] Production Express server (`server/index.js`) and multi-stage `Dockerfile`.
-- [x] Automated test suites:
-  - Node.js test runner passing 8/8 tests covering Care Loop state transitions, end-to-end due-to-resolution flow, and RBAC permission enforcement.
-- [x] Production build verified (`dist/index.html` generated with 0 errors).
-- [x] Git commits and push verified to remote repository `main` branch.
+## 3. Implemented Features & Recent Fixes
 
-## 4. Partially Implemented Features
-- None (All P0 requirements operational).
+### A. Rahul Persona Bug Fix (Root Cause & Resolution)
+- **Root Cause:** Persona switcher previously invoked `switchRole(p.role)`, which searched `SEEDED_PROFILES.find(p => p.role === role)`. Since both Priya and Rahul have `role: 'family'` and Priya appeared first in the array, clicking Rahul always selected Priya. Furthermore, `FamilyCoordinationView` hardcoded `"Priya's Hub"`.
+- **Resolution:**
+  - Switched navigation to explicit profile ID: `switchProfile(profileId: string)`.
+  - Updated `PersonaSwitcher` to call `switchProfile(p.id)`.
+  - Dynamically titles the family view as `{currentProfile.fullName.split(' ')[0]}'s Hub` (displays "Rahul's Hub" or "Priya's Hub").
+  - Enforced RBAC at both UI and business logic layers: Rahul's member profile has `canManageMedications: false`, correctly hiding the "Add Prescription" button and rejecting attempts at the engine level.
+  - Added 10 automated regression tests in `test/rahulPersona.test.js` validating distinct IDs, permissions, loop claims, and switching sequences.
 
-## 5. Unimplemented Features
-- External email delivery (omitted as per safety guidelines to avoid claiming fake delivery without configured SMTP credentials).
-- Complex medical diagnostics / wearables (explicitly excluded).
+### B. Timezone & Timestamp Correction
+- **Root Cause:** Doses generated using UTC string concatenation (`toISOString().split('T')[0]`) created cross-boundary discrepancies when run in local timezones (e.g. IST UTC+5:30), causing afternoon doses to appear at evening hours or miss filter queries.
+- **Resolution:**
+  - Updated `MedicationScheduleEngine` and `seededData.ts` to construct timestamps using local date components (`getFullYear()`, `getMonth()`, `getDate()`).
+  - Updated `ElderTodayView` to filter today's doses using local date comparison.
+  - Bumped state storage key to `alwayswithyou_state_v2` ensuring fresh, consistent timestamps across reloads.
+
+### C. UI/UX Redesign (Brand-Aligned & Human-Centred)
+- **Desktop Sidebar Navigation:** Fixed left sidebar featuring product identity, care recipient context (Sheela Verma, 82), role-specific navigation, and one-click profile switching.
+- **Mobile Navigation:** Responsive top bar with persona indicator and bottom tab bar ensuring comfortable one-handed navigation without horizontal overflow.
+- **Compact Floating Demo Clock:** Collapsible floating widget (`bottom-20 md:bottom-4`) that displays a minimal live status pill when collapsed and expands on click, preventing UI obstruction.
+- **Role-Aware Workspaces:**
+  - **ELDER Today:** Large text (24px+), clear contrast, read-aloud voice support, simple check-in actions, and access privacy receipts.
+  - **FAMILY Coordination:** Segmented tabs for active Care Loops, prescriptions, and appointments with atomic claim/handoff modals.
+  - **CAREGIVER Shift:** Shift status, active loop claiming, observation logs, and formal shift handover acceptance.
+  - **SHARED Timeline:** Immutable chronological feed tracking all events, actors, and provenance tags.
+
+## 4. Automated Test Results (18/18 Passing)
+All test suites run via Node.js test runner (`node --test test/*.test.js`):
+- `test/careLoop.test.js`:
+  - `CareLoopEngine: creates a loop in OPEN state with calculated deadline` (PASS)
+  - `CareLoopEngine: claims an open loop atomically` (PASS)
+  - `CareLoopEngine: prevents double claim by unauthorized actors` (PASS)
+  - `CareLoopEngine: transitions from claimed to handed_off to another member` (PASS)
+  - `CareLoopEngine: mandates resolution notes and evidence to resolve loop` (PASS)
+  - `CareLoopEngine: advances to lapsed and escalated when deadline passes without claim` (PASS)
+- `test/careLoopWorkflow.test.js`:
+  - `End-to-End Care Loop Workflow: Due -> Unconfirmed -> Loop Created -> Claimed -> Handed Off -> Resolved` (PASS)
+  - `Role-based Permission Enforcement: Rahul cannot manage medications` (PASS)
+- `test/rahulPersona.test.js`:
+  - `Rahul profile exists in SEEDED_PROFILES with id=user-rahul and role=family` (PASS)
+  - `Priya and Rahul both have role=family but are distinct profiles` (PASS)
+  - `Rahul's member record: canManageMedications=false, canViewAudit=true` (PASS)
+  - `Priya's member record: canManageMedications=true` (PASS)
+  - `switchProfile(user-rahul) returns Rahul, not Priya` (PASS)
+  - `switchRole("family") returns Priya — proves the old role-based bug` (PASS)
+  - `CareLoopEngine: Rahul can claim an open loop` (PASS)
+  - `Permission check: canManageMedications is false for Rahul, true for Priya` (PASS)
+  - `All 4 personas have distinct IDs` (PASS)
+  - `Persona switching sequence: Priya→Rahul→Sheela→Sunita→Priya all return correct profiles` (PASS)
+
+## 5. Deployment Status & Known External Blocker
+- **Docker & Server:** Tested and working. Multi-stage Dockerfile builds `dist/` and runs production Express server.
+- **Google Cloud Run:** Deployment blocked on GCP IAM permissions. The service account `1059717057567-compute@developer.gserviceaccount.com` in project `sunny-emissary-463707-u0` lacks the `serviceusage.services.enable` permission to enable the Cloud Run Admin API (`run.googleapis.com`). Requires GCP project administrator to enable Cloud Run API in Cloud Console.
 
 ## 6. Repository Structure
 ```
@@ -95,67 +110,6 @@ catalyst/
 │       └── index.ts
 └── test/
     ├── careLoop.test.js
-    └── careLoopWorkflow.test.js
+    ├── careLoopWorkflow.test.js
+    └── rahulPersona.test.js
 ```
-
-## 7. Database Schema & Core Entities
-- `Profile`: ID, full name, role (elder | family | caregiver), phone, email, avatar, preferred language.
-- `CareCircle`: ID, name, elderProfileId, timezone, createdAt.
-- `CircleMember`: ID, circleId, profileId, role, relationship, permissions, active.
-- `Medication`: ID, circleId, name, dosage, instructions, frequency, scheduleTimes, category, active.
-- `DoseInstance`: ID, medicationId, scheduledTime, status (due | unconfirmed | taken | not_taken | skipped | follow_up), provenance, actorId, careLoopId.
-- `CareLoop`: ID, circleId, sourceEventType, sourceId, title, description, status (open | claimed | handed_off | lapsed | escalated | resolved), ownerId, escalationLevel, deadline, evidenceType, resolutionNotes.
-- `CaregiverHandover`: ID, departingCaregiverId, arrivingCaregiverId, briefText, unresolvedLoopsCount, observations, acceptedAt.
-- `TimelineEvent`: ID, timestamp, eventType, title, description, actorName, actorRole, provenance, severity.
-
-## 8. Safety and Trust Rules
-- No check-in does NOT mean medication was missed; represented honestly as "unconfirmed".
-- "Taken" is user-reported confirmation, not ingestion proof.
-- Caregiver observations preserve provenance.
-- Prescription changes require authorized human action.
-- Mandatory evidence before closing Care Loops.
-
-## 9. Environment Variables
-- `PORT`: Port for Express server (default `8080`).
-- `NODE_ENV`: `production` / `development`.
-
-## 10. Local Setup and Build Commands
-```bash
-npm install
-npm run build
-npm test
-npm run server
-```
-
-## 11. Production Build & Deployment Commands
-```bash
-docker build -t alwayswithyou:latest .
-# Run locally:
-docker run -p 8080:8080 alwayswithyou:latest
-# Cloud Run deploy (once Run API is enabled on GCP project):
-# gcloud run deploy alwayswithyou --source . --platform managed --region us-central1 --allow-unauthenticated
-```
-
-## 12. Tests Executed & Actual Results
-- Command: `npm test`
-- Results:
-  - `✔ CareLoopEngine: creates a loop in OPEN state with calculated deadline`
-  - `✔ CareLoopEngine: claims an open loop atomically`
-  - `✔ CareLoopEngine: prevents double claim by unauthorized actors`
-  - `✔ CareLoopEngine: transitions from claimed to handed_off to another member`
-  - `✔ CareLoopEngine: mandates resolution notes and evidence to resolve loop`
-  - `✔ CareLoopEngine: advances to lapsed and escalated when deadline passes without claim`
-  - `✔ End-to-End Care Loop Workflow: Due -> Unconfirmed -> Loop Created -> Claimed -> Handed Off -> Resolved`
-  - `✔ Role-based Permission Enforcement: Rahul cannot manage medications`
-  - Total: 8 passed, 0 failed.
-
-## 13. Deployment Status & Verification
-- **Production Build:** Verified (`dist/assets/index-Dqh4CTt2.js` 222.25 kB, clean compile).
-- **Server:** Verified Express production static server ready to serve on port 8080.
-- **Docker:** Multi-stage production `Dockerfile` created and configured.
-- **Cloud Run Deployment Blocker:** Attempted automated deployment via `gcloud run deploy`. The authenticated service account `1059717057567-compute@developer.gserviceaccount.com` in GCP project `sunny-emissary-463707-u0` lacks IAM permission `serviceusage.services.enable` to activate `run.googleapis.com` (Cloud Run Admin API). Once the Cloud Run Admin API is enabled on the GCP project by the project owner via `gcloud auth login` with owner permissions or through the Google Cloud Console, running `gcloud run deploy alwayswithyou --source . --platform managed --allow-unauthenticated` will deploy the container immediately.
-
-## 14. Current Branch & Latest Commit Hash
-- Branch: `main`
-- Remote: `https://github.com/pranavgothwal/catalyst.git`
-- Latest Commit: `f6093c6`

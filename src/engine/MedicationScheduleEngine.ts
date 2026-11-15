@@ -12,23 +12,27 @@ export class MedicationScheduleEngine {
     circleId: string
   ): DoseInstance[] {
     const newInstances: DoseInstance[] = [];
-    const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`; // Local YYYY-MM-DD
 
     for (const med of medications) {
       if (!med.active) continue;
 
       for (const timeStr of med.scheduleTimes) {
-        // e.g. timeStr is "08:00"
+        // e.g. timeStr is "08:30"
         const [hours, minutes] = timeStr.split(':').map(Number);
-        const scheduledDate = new Date(date);
-        scheduledDate.setHours(hours, minutes, 0, 0);
+        const scheduledDate = new Date(year, date.getMonth(), date.getDate(), hours, minutes, 0, 0);
         const scheduledIso = scheduledDate.toISOString();
 
         // Check if instance already exists
         const exists = existingInstances.some(
           (inst) =>
             inst.medicationId === med.id &&
-            inst.scheduledTime.startsWith(dateStr) &&
+            new Date(inst.scheduledTime).getFullYear() === year &&
+            new Date(inst.scheduledTime).getMonth() === date.getMonth() &&
+            new Date(inst.scheduledTime).getDate() === date.getDate() &&
             new Date(inst.scheduledTime).getHours() === hours &&
             new Date(inst.scheduledTime).getMinutes() === minutes
         );

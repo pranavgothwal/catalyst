@@ -29,7 +29,7 @@ interface CareContextType {
   // Current Active Persona
   currentProfile: Profile;
   setCurrentProfile: (p: Profile) => void;
-  switchRole: (role: Role) => void;
+  switchProfile: (profileId: string) => void;
 
   // Circle Info
   circle: CareCircle;
@@ -83,7 +83,7 @@ interface CareContextType {
 
 const CareContext = createContext<CareContextType | null>(null);
 
-const STORAGE_KEY = 'alwayswithyou_state_v1';
+const STORAGE_KEY = 'alwayswithyou_state_v2';
 
 export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Try loading saved persistent state from localStorage
@@ -192,11 +192,10 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   ]);
 
   // Switch Role helper
-  const switchRole = (role: Role) => {
-    const target = SEEDED_PROFILES.find((p) => p.role === role);
+  const switchProfile = (profileId: string) => {
+    const target = SEEDED_PROFILES.find((p) => p.id === profileId);
     if (target) {
       setCurrentProfile(target);
-      // Log access receipt when switching personas
       logAccessAudit(target, 'timeline');
     }
   };
@@ -650,7 +649,7 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     () => ({
       currentProfile,
       setCurrentProfile,
-      switchRole,
+      switchProfile,
       circle: SEEDED_CIRCLE,
       members: SEEDED_MEMBERS,
       profiles: SEEDED_PROFILES,

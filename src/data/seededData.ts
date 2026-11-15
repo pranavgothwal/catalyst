@@ -151,53 +151,61 @@ export const SEEDED_MEDICATIONS: Medication[] = [
 ];
 
 export function getInitialDoseInstances(baseDate: Date): DoseInstance[] {
-  const d = baseDate.toISOString().split('T')[0];
+  const year = baseDate.getFullYear();
+  const month = baseDate.getMonth();
+  const day = baseDate.getDate();
+  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  const makeIso = (hours: number, minutes: number) => {
+    return new Date(year, month, day, hours, minutes, 0, 0).toISOString();
+  };
+
   return [
     {
-      id: `dose-metformin-${d}-0830`,
+      id: `dose-metformin-${dateStr}-0830`,
       medicationId: 'med-metformin',
       medicationName: 'Metformin 500mg',
       dosage: '1 tablet with breakfast',
       instructions: 'Take after eating breakfast to avoid stomach upset',
       circleId: 'circle-sheela-main',
-      scheduledTime: `${d}T08:30:00.000Z`,
+      scheduledTime: makeIso(8, 30),
       status: 'taken',
-      checkInTime: `${d}T08:42:00.000Z`,
+      checkInTime: makeIso(8, 42),
       actorId: 'user-sheela',
       actorName: 'Sheela Deshmukh',
       provenance: 'self_reported',
       notes: 'Taken with upma breakfast',
     },
     {
-      id: `dose-telmisartan-${d}-0900`,
+      id: `dose-telmisartan-${dateStr}-0900`,
       medicationId: 'med-telmisartan',
       medicationName: 'Telmisartan 40mg',
       dosage: '1 tablet',
       instructions: 'Blood pressure medication, take with water',
       circleId: 'circle-sheela-main',
-      scheduledTime: `${d}T09:00:00.000Z`,
+      scheduledTime: makeIso(9, 0),
       status: 'due',
       provenance: 'system',
     },
     {
-      id: `dose-calcium-${d}-1400`,
+      id: `dose-calcium-${dateStr}-1400`,
       medicationId: 'med-calcium',
       medicationName: 'Calcium + Vit D3',
       dosage: '1 chewable tablet',
       instructions: 'After lunch with water',
       circleId: 'circle-sheela-main',
-      scheduledTime: `${d}T14:00:00.000Z`,
+      scheduledTime: makeIso(14, 0),
       status: 'due',
       provenance: 'system',
     },
     {
-      id: `dose-atorvastatin-${d}-2130`,
+      id: `dose-atorvastatin-${dateStr}-2130`,
       medicationId: 'med-atorvastatin',
       medicationName: 'Atorvastatin 10mg',
       dosage: '1 tablet at bedtime',
       instructions: 'Cholesterol control, bedtime',
       circleId: 'circle-sheela-main',
-      scheduledTime: `${d}T21:30:00.000Z`,
+      scheduledTime: makeIso(21, 30),
       status: 'due',
       provenance: 'system',
     },

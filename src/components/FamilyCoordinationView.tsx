@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useCare } from '../context/CareContext';
 import { CareLoop, LoopEvent, Medication } from '../types';
 import {
@@ -30,6 +30,7 @@ export const FamilyCoordinationView: React.FC = () => {
     medications,
     addMedication,
     demoTime,
+    members,
   } = useCare();
 
   const [activeTab, setActiveTab] = useState<'loops' | 'meds' | 'appointments' | 'members'>('loops');
@@ -37,7 +38,7 @@ export const FamilyCoordinationView: React.FC = () => {
 
   // Modal states
   const [claimNotes, setClaimNotes] = useState('');
-  const [handOffTarget, setHandOffTarget] = useState(profiles[3].id); // Sunita default
+  const [handOffTarget, setHandOffTarget] = useState(() => profiles.find(p => p.role !== 'elder' && p.id !== currentProfile.id)?.id ?? profiles[3].id); // Sunita default
   const [handOffNotes, setHandOffNotes] = useState('Please check blood pressure and administer with breakfast.');
   const [resolutionNotes, setResolutionNotes] = useState('');
   const [evidenceType, setEvidenceType] = useState<CareLoop['evidenceType']>('observation');
@@ -52,6 +53,9 @@ export const FamilyCoordinationView: React.FC = () => {
 
   const openLoops = careLoops.filter((l) => l.status !== 'resolved');
   const resolvedLoops = careLoops.filter((l) => l.status === 'resolved');
+
+  const currentMember = members.find((m) => m.profileId === currentProfile.id);
+  const canAddMeds = currentMember?.canManageMedications ?? false;
 
   const handleClaim = (loopId: string) => {
     setErrorMessage(null);
@@ -124,7 +128,7 @@ export const FamilyCoordinationView: React.FC = () => {
               Family Care Coordination
             </h1>
             <span className="text-xs bg-sage-200 text-sage-800 font-bold px-2.5 py-1 rounded-full">
-              Priya's Hub
+              {currentProfile.fullName.split(' ')[0]}'s Hub
             </span>
           </div>
           <p className="text-sm text-forest-800/80 mt-1">
@@ -352,6 +356,7 @@ export const FamilyCoordinationView: React.FC = () => {
                 Prescription changes require authorised human confirmation.
               </p>
             </div>
+            {canAddMeds && (
             <button
               onClick={() => setShowAddMedModal(true)}
               className="bg-forest-900 hover:bg-forest-950 text-ivory-100 text-xs font-bold py-2.5 px-4 rounded-xl shadow flex items-center gap-2"
@@ -359,6 +364,7 @@ export const FamilyCoordinationView: React.FC = () => {
               <Plus className="w-4 h-4" />
               Add Prescription
             </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

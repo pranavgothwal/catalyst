@@ -1,28 +1,9 @@
 import React from 'react';
 import { useCare } from '../context/CareContext';
-import { Role } from '../types';
 import { Users, HeartHandshake, Shield, Sparkles } from 'lucide-react';
 
 export const PersonaSwitcher: React.FC = () => {
-  const { currentProfile, profiles, switchRole } = useCare();
-
-  const roleLabels: Record<Role, { title: string; badge: string; desc: string }> = {
-    elder: {
-      title: 'Sheela (Elder)',
-      badge: 'Today View',
-      desc: 'Dignity-first, large text, audio-ready check-ins',
-    },
-    family: {
-      title: 'Priya (Family)',
-      badge: 'Coordination',
-      desc: 'Care Loops, claims, escalation & circle oversight',
-    },
-    caregiver: {
-      title: 'Sunita (Caregiver)',
-      badge: 'Shift Handover',
-      desc: 'Shift start/end, structured briefs & observations',
-    },
-  };
+  const { currentProfile, profiles, switchProfile } = useCare();
 
   return (
     <div className="bg-forest-900 border-b border-forest-800 text-ivory-100 py-2.5 px-4 sticky top-0 z-40 shadow-sm">
@@ -57,13 +38,13 @@ export const PersonaSwitcher: React.FC = () => {
             return (
               <button
                 key={p.id}
-                onClick={() => switchRole(p.role)}
+                onClick={() => switchProfile(p.id)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   isActive
                     ? 'bg-sage-600 text-ivory-100 shadow-md scale-100'
                     : 'text-sage-200 hover:text-ivory-100 hover:bg-forest-800/50'
                 }`}
-                title={roleLabels[p.role].desc}
+                title={p.fullName}
               >
                 <img
                   src={p.avatar}

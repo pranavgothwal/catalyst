@@ -16,35 +16,61 @@ export const DemoClockControl: React.FC = () => {
   const openLoopsCount = careLoops.filter((l) => l.status !== 'resolved').length;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
-      <div className="bg-forest-900 border-2 border-forest-800 text-ivory-100 rounded-2xl shadow-2xl p-4 w-80 backdrop-blur-md bg-opacity-95 transition-all">
-        <div className="flex items-center justify-between pb-3 border-b border-forest-800">
-          <div className="flex items-center space-x-2">
-            <span className="relative flex h-3 w-3">
-              <span
-                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  isClockSimulated ? 'bg-amber-500' : 'bg-sage-500'
-                }`}
-              ></span>
-              <span
-                className={`relative inline-flex rounded-full h-3 w-3 ${
-                  isClockSimulated ? 'bg-amber-500' : 'bg-sage-500'
-                }`}
-              ></span>
+    <div className="fixed bottom-20 md:bottom-4 right-4 z-50">
+      {!isOpen ? (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="bg-forest-900 border-2 border-forest-800 text-ivory-100 rounded-2xl shadow-2xl px-4 py-2.5 flex items-center gap-2.5 hover:bg-forest-800 transition-all cursor-pointer backdrop-blur-md bg-opacity-95"
+          title="Click to open Demo Clock controls"
+        >
+          <span className="relative flex h-2.5 w-2.5">
+            <span
+              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                isClockSimulated ? 'bg-amber-500' : 'bg-sage-500'
+              }`}
+            ></span>
+            <span
+              className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                isClockSimulated ? 'bg-amber-500' : 'bg-sage-500'
+              }`}
+            ></span>
+          </span>
+          <Clock className="w-4 h-4 text-sage-200" />
+          <span className="text-xs font-bold text-ivory-100">{formattedTime}</span>
+          {openLoopsCount > 0 && (
+            <span className="bg-amber-500 text-ivory-100 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+              {openLoopsCount}
             </span>
-            <span className="font-bold text-xs uppercase tracking-wider text-sage-200">
-              Deterministic Demo Clock
-            </span>
+          )}
+        </button>
+      ) : (
+        <div className="bg-forest-900 border-2 border-forest-800 text-ivory-100 rounded-2xl shadow-2xl p-4 w-72 sm:w-80 backdrop-blur-md bg-opacity-95 transition-all">
+          <div className="flex items-center justify-between pb-3 border-b border-forest-800">
+            <div className="flex items-center space-x-2">
+              <span className="relative flex h-3 w-3">
+                <span
+                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    isClockSimulated ? 'bg-amber-500' : 'bg-sage-500'
+                  }`}
+                ></span>
+                <span
+                  className={`relative inline-flex rounded-full h-3 w-3 ${
+                    isClockSimulated ? 'bg-amber-500' : 'bg-sage-500'
+                  }`}
+                ></span>
+              </span>
+              <span className="font-bold text-xs uppercase tracking-wider text-sage-200">
+                Deterministic Demo Clock
+              </span>
+            </div>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="text-xs text-sage-200 hover:text-ivory-100 underline"
+            >
+              Minimize
+            </button>
           </div>
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="text-xs text-sage-200 hover:text-ivory-100 underline"
-          >
-            {isOpen ? 'Minimize' : 'Expand'}
-          </button>
-        </div>
 
-        {isOpen && (
           <div className="pt-3 space-y-3">
             <div className="flex items-baseline justify-between">
               <div>
@@ -105,8 +131,8 @@ export const DemoClockControl: React.FC = () => {
               </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

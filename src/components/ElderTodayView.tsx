@@ -33,9 +33,15 @@ export const ElderTodayView: React.FC = () => {
   const [skipReason, setSkipReason] = useState<string>('Not feeling well / nausea');
   const [showAccessModal, setShowAccessModal] = useState(false);
 
-  // Filter doses for today
-  const todayStr = demoTime.toISOString().split('T')[0];
-  const todayDoses = doseInstances.filter((d) => d.scheduledTime.startsWith(todayStr));
+  // Filter doses for today (using local date comparison to avoid UTC boundary issues)
+  const todayDoses = doseInstances.filter((d) => {
+    const doseDate = new Date(d.scheduledTime);
+    return (
+      doseDate.getFullYear() === demoTime.getFullYear() &&
+      doseDate.getMonth() === demoTime.getMonth() &&
+      doseDate.getDate() === demoTime.getDate()
+    );
+  });
 
   // Speech synthesizer helper for accessibility
   const handleSpeak = (text: string, id: string) => {
