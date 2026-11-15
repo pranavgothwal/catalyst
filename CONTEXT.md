@@ -16,9 +16,9 @@
   - `CareLoopEngine`: Atomic claims, handoffs, lapse/escalation, evidence-backed resolutions.
   - `MedicationScheduleEngine`: Timezone-aware, idempotent daily dose generation, grace periods.
   - `CareContext`: Persistent state, persona switching, and deterministic demo clock.
-- **Deployment:** Multi-stage Dockerfile for Google Cloud Run containerized deployment.
+- **Deployment:** Multi-stage Dockerfile for containerized deployment (Cloud Run ready).
 
-## 3. Implemented Features (P0 Complete)
+## 3. Implemented Features (P0 Complete & Verified)
 - [x] Cloned catalyst repository (`https://github.com/pranavgothwal/catalyst.git`).
 - [x] Full React 18 + TypeScript + Vite + Tailwind CSS scaffold.
 - [x] Role-aware unified experiences on shared care data:
@@ -47,12 +47,13 @@
 - [x] Automated test suite:
   - Node.js test runner passing 6/6 tests covering all Care Loop state transitions.
 - [x] Production build verified (`dist/index.html` generated with 0 errors).
+- [x] Git commits and push verified to remote repository `main` branch.
 
 ## 4. Partially Implemented Features
 - None (All P0 requirements operational).
 
 ## 5. Unimplemented Features
-- External email delivery (omitted as per safety guidelines to avoid claiming fake delivery without SMTP credentials).
+- External email delivery (omitted as per safety guidelines to avoid claiming fake delivery without configured SMTP credentials).
 - Complex medical diagnostics / wearables (explicitly excluded).
 
 ## 6. Repository Structure
@@ -127,7 +128,7 @@ npm run server
 docker build -t alwayswithyou:latest .
 # Run locally:
 docker run -p 8080:8080 alwayswithyou:latest
-# Cloud Run deploy:
+# Cloud Run deploy (once Run API is enabled on GCP project):
 # gcloud run deploy alwayswithyou --source . --platform managed --region us-central1 --allow-unauthenticated
 ```
 
@@ -142,6 +143,13 @@ docker run -p 8080:8080 alwayswithyou:latest
   - `✔ CareLoopEngine: advances to lapsed and escalated when deadline passes without claim`
   - Total: 6 passed, 0 failed.
 
-## 13. Deployment Status
-- Local Dockerfile and production static server fully configured and verified.
-- Target: Google Cloud Run.
+## 13. Deployment Status & Verification
+- **Production Build:** Verified (Vite production bundle generated clean in `dist/`).
+- **Server:** Verified Express production static server ready to serve on port 8080.
+- **Docker:** Multi-stage production `Dockerfile` created and configured.
+- **Cloud Run Deployment Blocker:** Attempted automated deployment via `gcloud run deploy`. The authenticated service account `1059717057567-compute@developer.gserviceaccount.com` in GCP project `sunny-emissary-463707-u0` lacks IAM permission `serviceusage.services.enable` to activate `run.googleapis.com` (Cloud Run Admin API) or deploy services. Once the Cloud Run Admin API is enabled on the GCP project by the project owner via `gcloud auth login` with owner permissions or through the Google Cloud Console, running `gcloud run deploy alwayswithyou --source . --platform managed --allow-unauthenticated` will deploy the container immediately.
+
+## 14. Current Branch & Latest Commit Hash
+- Branch: `main`
+- Remote: `https://github.com/pranavgothwal/catalyst.git`
+- Latest Commit: `958723d`
