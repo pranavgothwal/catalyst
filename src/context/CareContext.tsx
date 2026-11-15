@@ -85,14 +85,70 @@ const CareContext = createContext<CareContextType | null>(null);
 
 const STORAGE_KEY = 'alwayswithyou_state_v2';
 
+// Defensive validator for persisted state from localStorage
+function validateAndSanitizeSavedState(rawState: unknown): Record<string, any> | null {
+  if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)) {
+    return null;
+  }
+  const obj = rawState as Record<string, any>;
+  const sanitized: Record<string, any> = {};
+
+  // Validate demoTime
+  if (typeof obj.demoTime === 'string') {
+    const parsed = Date.parse(obj.demoTime);
+    if (!Number.isNaN(parsed)) {
+      sanitized.demoTime = obj.demoTime;
+    }
+  }
+
+  // Validate currentProfileId against known seeded profiles
+  if (typeof obj.currentProfileId === 'string' && SEEDED_PROFILES.some(p => p.id === obj.currentProfileId)) {
+    sanitized.currentProfileId = obj.currentProfileId;
+  }
+
+  // Validate language
+  if (obj.language === 'en' || obj.language === 'hi' || obj.language === 'mr') {
+    sanitized.language = obj.language;
+  }
+
+  // Validate arrays: only keep arrays with items having valid IDs
+  const arrayFields = [
+    'medications',
+    'doseInstances',
+    'careLoops',
+    'loopEvents',
+    'appointments',
+    'handovers',
+    'timeline',
+    'accessReceipts'
+  ];
+
+  for (const field of arrayFields) {
+    if (Array.isArray(obj[field])) {
+      // Filter out null/undefined/non-object elements or corrupt entries without ids
+      sanitized[field] = obj[field].filter((item: any) => item && typeof item === 'object' && typeof item.id === 'string');
+    }
+  }
+
+  if (typeof obj.isClockSimulated === 'boolean') {
+    sanitized.isClockSimulated = obj.isClockSimulated;
+  }
+
+  return sanitized;
+}
+
 export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Try loading saved persistent state from localStorage
+  // Try loading saved persistent state from localStorage with defensive validation
   const savedState = useMemo(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return validateAndSanitizeSavedState(parsed);
+      }
     } catch (e) {
-      // Local storage unparseable or in private mode
+      // Local storage unparseable, corrupt, or in private mode: cleanly fallback
+      console.warn('Recovered gracefully from unreadable or malformed localStorage');
     }
     return null;
   }, []);
@@ -357,6 +413,17 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     reason?: string,
     notes?: string
   ) => {
+    // Sanitize free-form user text strings
+    const cleanReason = reason ? reason.trim().slice(0, 300) : undefined;
+    const cleanNotes = notes ? notes.trim().slice(0, 500) : undefined;
+
+    // Check if dose was already checked in to prevent duplicate duplicate/conflicting records
+    const existing = doseInstances.find((d) => d.id === doseId);
+    if (existing && existing.checkInTime && existing.status === status) {
+      // Already recorded with the same status
+      return;
+    }
+
     const nowIso = demoTime.toISOString();
     let affectedDose: DoseInstance | undefined;
 
@@ -375,8 +442,8 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 : currentProfile.role === 'caregiver'
                 ? 'caregiver_observed'
                 : 'family_observed',
-            reason,
-            notes,
+            reason: cleanReason,
+            notes: cleanNotes,
           };
           return affectedDose;
         }
@@ -401,7 +468,7 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       statusLabel = 'Reported Not Taken';
     } else if (status === 'skipped') {
       severity = 'warning';
-      statusLabel = `Skipped (${reason || 'no reason stated'})`;
+      statusLabel = `Skipped (${cleanReason || 'no reason stated'})`;
     } else if (status === 'follow_up') {
       severity = 'warning';
       statusLabel = 'Follow-up Required';
@@ -410,7 +477,7 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addTimelineEvent(
       'medication',
       `${affectedDose?.medicationName || 'Medication'} ${statusLabel}`,
-      `${currentProfile.fullName} recorded status. Notes: ${notes || reason || 'None'}. [Provenance: ${provenanceLabel}]`,
+      `${currentProfile.fullName} recorded status. Notes: ${cleanNotes || cleanReason || 'None'}. [Provenance: ${provenanceLabel}]`,
       severity,
       provenanceLabel
     );
@@ -435,12 +502,13 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: false, error: 'Elders cannot claim care loops. Care coordination is handled by family and caregivers.' };
     }
 
+    const cleanNotes = notes ? notes.trim().slice(0, 500) : undefined;
     const res = CareLoopEngine.claimLoop(
       targetLoop,
       currentProfile.id,
       currentProfile.fullName,
       demoTime,
-      notes
+      cleanNotes
     );
 
     if (res.success && res.loop && res.event) {
@@ -471,6 +539,7 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const newOwner = SEEDED_PROFILES.find((p) => p.id === newOwnerId);
     if (!newOwner) return { success: false, error: 'Target owner not found' };
 
+    const cleanNotes = notes ? notes.trim().slice(0, 500) : '';
     const res = CareLoopEngine.handOffLoop(
       targetLoop,
       currentProfile.id,
@@ -478,7 +547,7 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       newOwner.id,
       newOwner.fullName,
       demoTime,
-      notes
+      cleanNotes
     );
 
     if (res.success && res.loop && res.event) {
@@ -505,11 +574,12 @@ export const CareProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const targetLoop = careLoops.find((l) => l.id === loopId);
     if (!targetLoop) return { success: false, error: 'Loop not found' };
 
+    const cleanResolutionNotes = resolutionNotes ? resolutionNotes.trim().slice(0, 500) : 'Resolved';
     const res = CareLoopEngine.resolveLoop(
       targetLoop,
       currentProfile.id,
       currentProfile.fullName,
-      resolutionNotes,
+      cleanResolutionNotes,
       evidenceType,
       demoTime
     );

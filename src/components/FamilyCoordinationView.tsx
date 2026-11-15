@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useCare } from '../context/CareContext';
 import { CareLoop, LoopEvent, Medication } from '../types';
 import {

@@ -9,39 +9,38 @@
 - **Core Product Thesis:** Elderly care fails in the gaps between people, not simply because of forgotten reminders. AlwaysWithYOU turns care events that need human attention into owned, trackable, and closable responsibilities called **Care Loops**. It connects elderly individuals, family members, and caregivers while preserving the elderly person's dignity, agency, and control.
 - **Problem Statement:** Elderly Care & Medication Management Platform.
 
-## 2. Current Architecture & Technology Stack
+## 2. Current Architecture & Honest Persistence Model
 - **Frontend:** React 18 / Vite / TypeScript / Tailwind CSS / Lucide React icons.
-- **Backend / Server:** Express.js production server, health endpoints, SPA static routing, API endpoints for loops.
+- **Backend / Server:** Express.js production server, health endpoints, SPA static routing, disabled mock mutation endpoints to prevent unauthenticated injection.
 - **State & Deterministic Engines:**
   - `CareLoopEngine`: Atomic claims, handoffs, lapse/escalation, evidence-backed resolutions.
   - `MedicationScheduleEngine`: Timezone-safe, idempotent daily dose generation, grace periods.
-  - `CareContext`: Persistent state with `localStorage` (versioned `alwayswithyou_state_v2`), profile ID-based switching (`switchProfile`), RBAC permission checks, and deterministic demo clock.
-- **Deployment:** Multi-stage Dockerfile for containerized deployment (Cloud Run ready).
+  - `CareContext`: Persistent state with `localStorage` (versioned `alwayswithyou_state_v2`), profile ID-based switching (`switchProfile`), RBAC permission checks, input sanitization, safe schema recovery, and deterministic demo clock.
+- **Authentication & Persistence Realities:**
+  - **Persona Switching is a deterministic client demo capability**, not an authenticated session token model. There are no server-side sessions, JWTs, or passwords.
+  - Persistence is client-side (`localStorage`), designed for offline resilience and local demonstration. Cross-device and multi-user synchronization is not claimed.
+- **Deployment:** Multi-stage hardened Dockerfile (runs as non-root `USER node`) and `vercel.json` with enterprise security headers.
 
-## 3. Implemented Features & Audit Verifications
+## 3. Security Remediations Implemented (Second Submission)
+1. **Defensive HTTP Security Headers (Vercel & Express):**
+   - Implemented strict Content Security Policy (CSP): `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://images.unsplash.com https://api.dicebear.com; connect-src 'self';`
+   - Configured `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, and `Referrer-Policy: strict-origin-when-cross-origin`.
+   - Restricted device APIs with `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`.
+2. **Backend Hardening (`server/index.js`):**
+   - Disabled framework disclosure (`app.disable('x-powered-by')`).
+   - Restricted request payload limits (`express.json({ limit: '16kb' })`) to prevent memory exhaustion / DoS.
+   - Enforced origin-whitelisted CORS policy, rejecting arbitrary third-party cross-origin requests.
+   - Added in-memory rate limiting (120 req/min sliding window).
+   - Disabled and explicitly blocked unauthenticated public mutation endpoints (`/api/loops/claim`).
+3. **Frontend Persistence Defense (`CareContext.tsx`):**
+   - Added `validateAndSanitizeSavedState` to strictly validate deserialized `localStorage` against known profile schemas, valid ISO timestamps, and array objects with valid IDs before restoring state.
+   - Implemented safe recovery: malformed, corrupted, or injected localStorage structures are discarded cleanly without crashing.
+   - Guarded duplicate medication check-ins to prevent race conditions or duplicate entries.
+   - Added string sanitization (trimming and length limits) on user inputs (loop notes, check-in notes, reasons).
+4. **Container Security (`Dockerfile`):**
+   - Added unprivileged user isolation: switches from root to non-root `USER node` with proper directory ownership (`chown -R node:node /app`).
 
-### A. Manual-Interaction & UI Regression Audit (Verified)
-1. **Four-Persona Switching:** All personas (Sheela, Priya, Rahul, Sunita) switch deterministically by unique `profileId` via `switchProfile(p.id)`. On mobile, selecting a persona automatically closes the sidebar drawer.
-2. **Permission Segregation Across Switching & Refreshes:**
-   - Priya (`canManageMedications: true`) has full prescription management privileges.
-   - Rahul (`canManageMedications: false`) is strictly restricted to View Only mode (Add Prescription button hidden; backend engine enforces rejection).
-   - A dedicated **Care Circle** tab in `FamilyCoordinationView` renders the membership roster with explicit badges for prescription authorization, audit access, and emergency contact status.
-3. **Care Loop Lifecycle:** Open, Claim, Hand Off, Lapse, Escalate, and Resolve are verified through the UI:
-   - Hand-off targets dynamically exclude the current user and elder role.
-   - Non-owners of claimed loops are clearly informed that only the current owner can reassign responsibility.
-   - Evidence and resolution notes are strictly mandatory to close loops.
-4. **Deterministic Demo Clock:** Quick-advance buttons (`+15m`, `+45m (Miss)`, `+2h (Escalate)`, `Reset 9:15 AM`) reliably trigger dose evaluations, loop creation, and status transitions.
-5. **Layout & Responsive Shell:**
-   - Desktop: Left sidebar (`w-64`) with brand identity, care recipient context ("Sheela Deshmukh, 82"), role navigation, and persona switcher.
-   - Mobile: Top bar with persona badge, sliding drawer, bottom tab bar, and compact floating demo clock pill positioned at `bottom-20` to avoid viewport obstruction.
-6. **Elder Today Accessibility:** High-contrast 24px text, native `SpeechSynthesis` read-aloud support, skip reason logging, privacy access receipts, and full English, Hindi (हिंदी), and Marathi (मराठी) localization.
-7. **Actionable Feedback:** Zero broken or purely decorative buttons; input validation messages for empty notes and unauthorized actions.
-8. **Error-Free Execution:** Zero console errors, valid JSX hierarchy, and clean mobile responsive flow.
-
-### B. Timezone & Timestamp Correction
-- Doses generated using local date components (`getFullYear()`, `getMonth()`, `getDate()`) to eliminate UTC boundary shifts in Indian Standard Time (IST UTC+5:30) and other non-UTC environments.
-
-## 4. Automated Test Results (21/21 Passing)
+## 4. Automated Test Results (25/25 Passing)
 All test suites run via Node.js test runner (`node --test test/*.test.js`):
 - `test/careLoop.test.js` (6 tests):
   - `CareLoopEngine: creates a loop in OPEN state with calculated deadline` (PASS)
@@ -67,10 +66,16 @@ All test suites run via Node.js test runner (`node --test test/*.test.js`):
   - `Care Circle: All members have defined permissions and roles` (PASS)
   - `CareLoopEngine: Non-owner cannot initiate a handoff on a claimed loop` (PASS)
   - `Handoff validation: Available handoff targets exclude current user and elder role` (PASS)
+- `test/securityRemediation.test.js` (4 tests):
+  - `Security & Validation: validates and sanitizes corrupt localStorage payloads gracefully` (PASS)
+  - `Security & Invariants: prevents duplicate dose check-ins with identical status` (PASS)
+  - `Security & Sanitization: truncates and trims free-form notes and reason inputs` (PASS)
+  - `Backend Security: verifies unauthenticated endpoint lock and headers` (PASS)
 
-## 5. Deployment Status & Known External Blocker
-- **Docker & Server:** Tested and verified. Multi-stage Dockerfile builds `dist/` and runs production Express server.
-- **Google Cloud Run:** Deployment is blocked on GCP IAM permissions. The service account `1059717057567-compute@developer.gserviceaccount.com` in project `sunny-emissary-463707-u0` lacks `serviceusage.services.enable` to enable the Cloud Run Admin API (`run.googleapis.com`). Requires GCP project administrator to enable Cloud Run API in Cloud Console.
+## 5. Deployment Status & Compatibility
+- **Vercel:** Fully configured with `vercel.json` providing static SPA routing and defense-in-depth security headers.
+- **Docker & Cloud Run:** Multi-stage production container verified with unprivileged `USER node` runtime on port 8080.
+- **Known External Blocker:** Google Cloud Run deployment remains blocked on GCP IAM permissions (`serviceusage.services.enable` missing for Cloud Run Admin API). Vercel deployment provides an immediate working public alternative.
 
 ## 6. Repository Structure
 ```
@@ -83,6 +88,7 @@ catalyst/
 ├── postcss.config.js
 ├── tailwind.config.js
 ├── tsconfig.json
+├── vercel.json
 ├── vite.config.ts
 ├── server/
 │   └── index.js
@@ -109,5 +115,6 @@ catalyst/
 └── test/
     ├── careLoop.test.js
     ├── careLoopWorkflow.test.js
-    └── rahulPersona.test.js
+    ├── rahulPersona.test.js
+    └── securityRemediation.test.js
 ```
